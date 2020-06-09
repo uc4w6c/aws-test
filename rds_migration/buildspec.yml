@@ -1,0 +1,13 @@
+version: 0.2
+
+env:
+  secrets-manager:
+    username: xxdb/deploy_user_secret:username
+    password: xxdb/deploy_user_secret:password
+    host: xxdb/deploy_user_secret:host
+    port: xxdb/deploy_user_secret:port
+
+phases:
+  build:
+    - echo start
+    - docker run --rm -v $(pwd)/sql:/flyway/sql flyway/flyway -url=jdbc:postgresql://${host}:${port}/db -schemas=app -user=${username} -password=${password} migrate

@@ -1,0 +1,120 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Resources:
+  MigrationBuildRole:
+    Type: 'AWS::IAM::Role'
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - codebuild.amazonaws.com
+              Action:
+                - 'sts:AssumeRole'
+      Path: /
+      ManagedPolicyArns:
+        - 'arn:aws:iam::aws:policy/SecretsManagerReadWrite'
+      Policies:
+        PolicyName: MigrationBuildPolicy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+            - Effect: Allow
+              Action:
+                - logs:CreateLogGroup
+                - logs:CreateLogStream
+                - logs:PutLogEvents
+              Resources: 'arn:aws:logs:*:*:*'
+            - Effect: Allow
+              Action:
+                - s3:PutObject
+                - s3:GetObject
+                - s3:GetObjectVersion
+                - s3:GetBucketAcl
+                - s3:GetBucketLocation
+              Resources: 'arn:aws:s3::codepipeline-ap-northeast-1-*'
+            - Effect: Allow
+              Action:
+                - codebuild:CreateReportGroup
+                - codebuild:CreateReport
+                - codebuild:UpdateReport
+                - codebuild:BatchPutTestCases
+              Resources: 'arn:aws:codebuild:ap-northeast-1:*:*'
+            - Effect: Allow
+              Action:
+                - ec2:CreateNetworkInterface
+                - ec2:CreateNetworkInterfacePermission
+                - ec2:DescribeDhcpOptions
+                - ec2:DescribeNetworkInterfaces
+                - ec2:DeleteNetworkInterface
+                - ec2:DescribeSubnets
+                - ec2:DescribeSecrityGroups
+                - ec2:DescribeVpcs
+              Resources: '*'
+
+  MigrationCodePipelineServiceRole:
+    # TODO
+
+  CodeBuildProject:
+    Type: AWS::CodeBuild::Project
+    Properties:
+      Name: migration_codebuild
+      Artifacts:
+        Type: CODEPIPELINE
+        # Location: 'codepipeline-ap-northeast-1-xxxxxx'
+        # Type: S3
+      Environment:
+        ComputeType: BUILD_GENERAL1_SMALL
+        Image: 'aws/codebuild/amazonlinux2-x86_64-standard:3.0-20.05.06'
+        Type: LINUX_CONTAINER
+        PrivilegedMode: true
+      ServiceRole: !Ref MigrationBuildRole
+      Source:
+        BuildSpec: buildspec.yml
+        Type: CODEPIPELINE
+      TimeoutInMinutes: 5
+      VpcConfig:
+        VpcId: vpc-
+        Subnets:
+          - subnet-
+        SecurityGroupIds:
+          - sg-
+
+  MigrationPipeline:
+    Type: AWS::CodePipeline::CodePipeline
+    Properties:
+      Name: migration_pipeline
+    ArtifactStore:
+      Location: 'codepipeline-ap-northeast-1-xxxxxx'
+      Type: S3
+    RestartExecutonOnUpdate: false
+    RoleArn: !GetAtt MigrationCodePipelineServiceRole
+    Stages:
+      - Name: Source
+        Actions:
+          - Name: SourceAction
+            ActionTypeId:
+              Category: Source
+              Owner: 
+            OutputArtifacts:
+              - Name: SourceOutput
+            Configuration:
+              BranchName: master
+              RepositoryName: xx
+              PollForSourceChanges: true
+            RunOrder: 1
+      - Name: Migration
+        InputArtifacts:
+          - Name: SourceOutput
+        ActionTypeId:
+          Category: Build
+          Owner: AWS
+          Version: 1
+          Provider: CodeBuild
+        Configuration:
+          ProjectName: !Ref CodeBuildProject
+        OutputArtifacts:
+          - Name: MigrationOutput
+        RunOrder: 1
