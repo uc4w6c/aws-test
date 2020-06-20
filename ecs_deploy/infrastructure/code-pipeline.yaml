@@ -1,13 +1,16 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
 Parameters:
+  SecurityGroup:
+    Type: String
+  Subnet:
+    Type: String
   GitHubRepositoryName:
     Type: String
   GitHubAccountName:
     Type: String
-  GitHubSecret:
+  GitHubOAuthToken:
     Type: String
-
 
 Resources:
 
@@ -34,15 +37,9 @@ Resources:
                   - logs:CreateLogStream
                   - logs:PutLogEvents
                   - ecr:GetAuthorizationToken
-                Resource: "*"
-              - Effect: Allow
-                Action:
                   - s3:GetObject
                   - s3:PutObject
                   - s3:GetObjectVersion
-                Resource: !Sub arn:aws:s3:::${S3BucketName}/*
-              - Effect: Allow
-                Action:
                   - ecr:GetDownloadUrlForLayer
                   - ecr:BatchGetImage
                   - ecr:BatchCheckLayerAvailability
@@ -50,7 +47,7 @@ Resources:
                   - ecr:InitiateLayerUpload
                   - ecr:UploadLayerPart
                   - ecr:CompleteLayerUpload
-                Resource: !Sub arn:aws:ecr:${AWS::Region}:${AWS::AccountId}:repository/${DockerRepository}
+                Resource: "*"
       Path: /
 
   # アプリケーションのテストやビルドの定義（開発環境）
@@ -62,10 +59,15 @@ Resources:
       Environment:
         ComputeType: BUILD_GENERAL1_SMALL
         Type: LINUX_CONTAINER
-        Image: !Ref DockerBuildImage
+        # Image: !Ref DockerBuildImage
+        Image: aws/codebuild/docker:18.09.0-1.7.0
         EnvironmentVariables:
           - Name: REPOSITORY_URI
             Value: !ImportValue DeployTestRepository
+          - Name: Subnet
+            Value: !Ref Subnet
+          - Name: SecurityGroup
+            Value: !Ref SecurityGroup
       Artifacts:
         Type: CODEPIPELINE
       Source:
@@ -126,22 +128,52 @@ Resources:
     Properties:
       Authentication: GITHUB_HMAC
       AuthenticationConfiguration:
-        SecretToken: !Ref GitHubSecret
+        SecretToken: "secret"
       Filters:
         - JsonPath: "$.ref"
-          MatchEquals: 'refs/heads/master'
+          MatchEquals: "refs/heads/master"
       TargetPipeline: !Ref Pipeline
       TargetAction: SourceAction
       Name: GitHubPipelineWebhook
       TargetPipelineVersion: !GetAtt Pipeline.Version
       RegisterWithThirdParty: "true"
 
+  # 継続的デプロイに必要な権限
+  CloudFormationRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              Service: cloudformation.amazonaws.com
+      Policies:
+        - PolicyName: code-pipeline-service
+          PolicyDocument:
+            Statement:
+              - Effect: Allow
+                Action:
+                  - iam:*
+                  - ecs:RegisterTaskDefinition
+                  - ecs:DeregisterTaskDefinition
+                  - ecs:CreateService
+                  - ecs:Delete*
+                  - logs:Delete*
+                  - cloudwatch:Delete*
+                Resource: "*"
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceAutoscaleRole
+        - arn:aws:iam::aws:policy/service-role/AmazonEC2ContainerServiceRole
+      Path: /
+
   # CodePipeLine
   Pipeline:
     Type: AWS::CodePipeline::Pipeline
     Properties:
       RoleArn: !GetAtt CodePipelineServiceRole.Arn
-      Name: !Ref PipelineName
+      Name: pipeline-test-build
       ArtifactStore:
         Type: S3
         Location: !Ref ArtifactBucket
@@ -158,11 +190,11 @@ Resources:
                 Owner: !Ref GitHubAccountName
                 Repo: !Ref GitHubRepositoryName
                 PollForSourceChanges: false
-                Branch: !Ref Branch
+                Branch: master
                 OAuthToken: !Ref GitHubOAuthToken
               RunOrder: 1
               OutputArtifacts:
-                - Name: App
+                - Name: SourceCode
         - Name: Build
           Actions:
             - Name: Build
@@ -172,24 +204,47 @@ Resources:
                 Version: 1
                 Provider: CodeBuild
               Configuration:
-                ProjectName: !Ref CodeBuildProject
+                ProjectName: !Ref CodeBuild
               RunOrder: 1
               InputArtifacts:
-                - Name: App
+                - Name: SourceCode
               OutputArtifacts:
                 - Name: BuildOutput
         - Name: Deploy
           Actions:
-            - Name: Deploy
+          Actions:
+            - Name: CreateEdgeChangeSet
               ActionTypeId:
                 Category: Deploy
+                Provider: CloudFormation
                 Owner: AWS
                 Version: 1
-                Provider: ECS
               Configuration:
-                ClusterName: !Ref Cluster
-                ServiceName: !Ref Service
-                FileName: imagedefinitions.json
-              RunOrder: 1
+                StackName: create-ecs-service
+                ActionMode: CHANGE_SET_REPLACE
+                ChangeSetName: ChangeSet
+                RoleArn: !GetAtt CloudFormationRole.Arn
+                Capabilities: CAPABILITY_NAMED_IAM
+                TemplatePath: SourceCode::ecs_deploy/application/deploy/ecs-service.yaml
+                TemplateConfiguration: BuildOutput::config.json
               InputArtifacts:
+                - Name: SourceCode
                 - Name: BuildOutput
+              OutputArtifacts:
+                - Name: CreatedEdgeChangeSet
+              RunOrder: 1
+            - Name: ExecuteEdgeChangeSet
+              ActionTypeId:
+                Category: Deploy
+                Provider: CloudFormation
+                Owner: AWS
+                Version: 1
+              Configuration:
+                StackName: create-ecs-service
+                ActionMode: CHANGE_SET_EXECUTE
+                ChangeSetName: ChangeSet
+              InputArtifacts:
+                - Name: CreatedEdgeChangeSet
+              OutputArtifacts:
+                - Name: EdgeDeployed
+              RunOrder: 2

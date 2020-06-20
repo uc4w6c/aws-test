@@ -9,13 +9,7 @@ phases:
       - pip install --upgrade awscli
   pre_build:
     commands:
-      - aws cloudformation validate-template --template-body fileb://deploy/cfn-master.yaml
       - IMAGE_NAME="${REPOSITORY_URI}:$(echo ${CODEBUILD_RESOLVED_SOURCE_VERSION} | head -c 7)"
-      - BASIC_AUTH='"BasicAuthUsername":"","BasicAuthPassword":""'
-      - |
-        if [ -e "deploy/${ENVIRONMENT_NAME}/env.sh" ]; then
-           $( cat "deploy/${ENVIRONMENT_NAME}/env.sh" )
-        fi
       - $(aws ecr get-login --no-include-email)
   build:
     commands:
@@ -25,7 +19,7 @@ phases:
   post_build:
     commands:
       - echo Build completed on $(date)
-      - printf '{"Parameters":{"ProjectID":"%s","DockerImage":"%s",%s}}' ${PROJECT_ID} ${IMAGE_NAME} ${BASIC_AUTH} > config.json
+      - printf '{"Parameters":{"Subnet":"%s", "SecurityGroup":"%s", "DockerImage":"%s"}}' ${Subnet} ${SecurityGroup} ${IMAGE_NAME} > config.json
 
 artifacts:
   files: config.json

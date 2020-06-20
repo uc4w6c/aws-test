@@ -1,6 +1,10 @@
 AWSTemplateFormatVersion: '2010-09-09'
 
 Parameters:
+  SecurityGroup:
+    Type: String
+  Subnet:
+    Type: String
   DockerImage:
     Type: String
 
@@ -75,6 +79,6 @@ Resources:
           AssignPublicIp: ENABLED
           # 後で隠す
           SecurityGroups:
-            - sg-XXXXXX
+            - !Ref SecurityGroup
           Subnets:
-            - subnet-XXXXXXXXXX
+            - !Ref Subnet
