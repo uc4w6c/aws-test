@@ -14,7 +14,8 @@ phases:
   build:
     commands:
       - echo Build started on $(date)
-      - docker build --tag ${IMAGE_NAME} ./ecs_deploy/application/Dockerfile
+      # - docker build --tag ${IMAGE_NAME} .
+      - docker build --tag ${IMAGE_NAME} -f ./ecs_deploy/application/Dockerfile .
       - docker push ${IMAGE_NAME}
   post_build:
     commands:
