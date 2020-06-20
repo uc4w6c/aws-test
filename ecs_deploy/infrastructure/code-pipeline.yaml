@@ -61,6 +61,7 @@ Resources:
         Type: LINUX_CONTAINER
         # Image: !Ref DockerBuildImage
         Image: aws/codebuild/docker:18.09.0-1.7.0
+        PrivilegedMode: true
         EnvironmentVariables:
           - Name: REPOSITORY_URI
             Value: !ImportValue DeployTestRepository
