@@ -1,0 +1,80 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Parameters:
+  DockerImage:
+    Type: String
+
+Resources:
+
+  # Fargate の起動に必要な権限
+  ExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Path: /
+
+  # Fargate（アプリケーション）に付与する権限
+  TaskRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Statement:
+          - Effect: Allow
+            Action: sts:AssumeRole
+            Principal:
+              Service: ecs-tasks.amazonaws.com
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy
+      Path: /
+
+  # Task定義
+  ApTaskDefinition:
+    Type: AWS::ECS::TaskDefinition
+    Properties:
+      # Family: !Ref AWS::StackName
+      ExecutionRoleArn: !GetAtt ExecutionRole.Arn
+      RequiresCompatibilities:
+        - FARGATE
+      ContainerDefinitions:
+        - Name: app
+          Image: !Ref DockerImage
+          Essential: true
+          PortMappings:
+            - ContainerPort: 3000
+          # Environment:
+          #   - Name: PROJECT_ID
+          #     Value: !Ref ProjectID
+          # LogConfiguration:
+            # LogDriver: awslogs
+            # Options:
+              # awslogs-region: !Ref AWS::Region
+              # awslogs-group: !Ref CloudWatchLogsGroup
+              # awslogs-stream-prefix: fargate
+      Cpu: 256
+      Memory: 512
+      NetworkMode: awsvpc
+      TaskRoleArn: !GetAtt TaskRole.Arn
+
+  # Service定義
+  FargateService:
+    Type: AWS::ECS::Service
+    Properties:
+      Cluster: !ImportValue DeployTestCluster
+      LaunchType: FARGATE
+      DesiredCount: 1
+      TaskDefinition: !Ref ApTaskDefinition
+      NetworkConfiguration:
+        AwsvpcConfiguration:
+          AssignPublicIp: ENABLED
+          # 後で隠す
+          SecurityGroups:
+            - sg-XXXXXX
+          Subnets:
+            - subnet-XXXXXXXXXX

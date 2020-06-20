@@ -1,0 +1,14 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Resources:
+  Repository:
+    Type: AWS::ECR::Repository
+    Properties:
+      RepositoryName: deploy-test-repository
+
+Outputs:
+  Repository:
+    Description: Test Repository
+    Value: !Ref Repository
+    Export: 
+      Name: DeployTestRepository

@@ -1,0 +1,14 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Resources:
+  Cluster:
+    Type: AWS::ECS::Cluster
+    Properties:
+      ClusterName: deploy-test-cluster
+
+Outputs:
+  Cluster:
+    Description: ECS Cluster
+    Value: !Ref Cluster
+    Export: 
+      Name: DeployTestCluster
