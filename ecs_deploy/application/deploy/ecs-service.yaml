@@ -77,7 +77,6 @@ Resources:
       NetworkConfiguration:
         AwsvpcConfiguration:
           AssignPublicIp: ENABLED
-          # 後で隠す
           SecurityGroups:
             - !Ref SecurityGroup
           Subnets:
