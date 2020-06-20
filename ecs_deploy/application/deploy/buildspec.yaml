@@ -14,14 +14,16 @@ phases:
   build:
     commands:
       - echo Build started on $(date)
+      - DEFAULT=`pwd`
       - cd ./ecs_deploy/application
       - docker build --tag ${IMAGE_NAME} .
       # - docker build --tag ${IMAGE_NAME} -f ./ecs_deploy/application/Dockerfile .
       - docker push ${IMAGE_NAME}
+      - cd ${DEFAULT}
   post_build:
     commands:
       - echo Build completed on $(date)
-      - printf '{"Parameters":{"Subnet":"%s", "SecurityGroup":"%s", "DockerImage":"%s"}}' ${Subnet} ${SecurityGroup} ${IMAGE_NAME} > config.json
+      - printf '{"Parameters":{"Subnet":"%s","SecurityGroup":"%s","DockerImage":"%s"}}' ${Subnet} ${SecurityGroup} ${IMAGE_NAME} > config.json
 
 artifacts:
   files: config.json
