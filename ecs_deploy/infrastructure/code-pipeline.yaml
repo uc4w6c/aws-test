@@ -64,7 +64,10 @@ Resources:
         PrivilegedMode: true
         EnvironmentVariables:
           - Name: REPOSITORY_URI
-            Value: !ImportValue DeployTestRepository
+            # Value: !ImportValue DeployTestRepository
+            Value: !Sub 
+              - ${AWS::AccountId}.dkr.ecr.${AWS::Region}.amazonaws.com/${Repository}
+              - Repository: !ImportValue DeployTestRepository
           - Name: Subnet
             Value: !Ref Subnet
           - Name: SecurityGroup
